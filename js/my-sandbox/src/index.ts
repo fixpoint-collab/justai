@@ -8,6 +8,9 @@ export default {
 
     // Get or create a sandbox instance
     const sandbox = getSandbox(env.Sandbox, 'my-sandbox');
+    sandbox.setEnvVars({
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
+    })
 
     // Execute a shell command
     if (url.pathname === '/run') {
@@ -20,6 +23,21 @@ export default {
       });
     }
 
+    // Forward chat requests to the container's chat endpoint
+    if (url.pathname === '/chat' && request.method === 'POST') {
+      const body = await request.json();
+      const response = await sandbox.containerFetch(
+        new URL('chat', request.url).toString(),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+        8080,
+      );
+      return response;
+    }
+
     // Work with files
     if (url.pathname === '/file') {
       await sandbox.writeFile('/workspace/hello.txt', 'Hello, Sandbox!');
@@ -29,6 +47,6 @@ export default {
       });
     }
 
-    return new Response('Try /run or /file');
+    return new Response('Try /run, /file, or POST /chat');
   }
 };

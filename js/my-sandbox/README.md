@@ -1,49 +1,25 @@
 # Minimal Sandbox SDK Example
 
-A minimal Cloudflare Worker that demonstrates the core capabilities of the Sandbox SDK.
-
-## Features
-
-- **Command Execution**: Execute Python code in isolated containers
-- **File Operations**: Read and write files in the sandbox filesystem
-- **Simple API**: Two endpoints demonstrating basic sandbox operations
+A minimal Cloudflare Worker that demonstrates Claude Agent interaction.
 
 ## How It Works
 
-This example provides two simple endpoints:
+This example provides a chat endpoint:
 
-1. **`/run`** - Executes Python code and returns the output
-2. **`/file`** - Creates a file, reads it back, and returns the contents
+1. **`POST /chat`** - Creates a file, reads it back, and returns the contents
 
 ## API Endpoints
 
 ### Execute Python Code
 
-```bash
-GET http://localhost:8787/run
-```
-
-Runs `python -c "print(2 + 2)"` and returns:
-
-```json
-{
-  "output": "4\n",
-  "success": true
-}
-```
-
-### File Operations
+Sends a message to Claude Agent.
 
 ```bash
-GET http://localhost:8787/file
-```
-
-Creates `/workspace/hello.txt`, reads it back, and returns:
-
-```json
-{
-  "content": "Hello, Sandbox!"
-}
+curl --location 'http://localhost:8787/chat' \
+--header 'Content-Type: application/json' \
+--data '{
+    "message": "What is in index.ts?"
+}'
 ```
 
 ## Setup
@@ -58,7 +34,7 @@ npm run build
 2. Run locally:
 
 ```bash
-cd examples/minimal # if you're not already here
+# add a .env file with ANTHROPIC_API_KEY set
 npm run dev
 ```
 
@@ -67,11 +43,11 @@ The first run will build the Docker container (2-3 minutes). Subsequent runs are
 ## Testing
 
 ```bash
-# Test command execution
-curl http://localhost:8787/run
-
-# Test file operations
-curl http://localhost:8787/file
+curl --location 'http://localhost:8787/chat' \
+--header 'Content-Type: application/json' \
+--data '{
+    "message": "What is in index.ts?"
+}'
 ```
 
 ## Deploy
