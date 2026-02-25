@@ -38,6 +38,21 @@ export default {
       return response;
     }
 
+    // Forward claude-chat requests to the container's claude-chat endpoint
+    if (url.pathname === '/claude-chat' && request.method === 'POST') {
+      const body = await request.json();
+      const response = await sandbox.containerFetch(
+        'http://localhost/claude-chat',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+        8080,
+      );
+      return response;
+    }
+
     if (url.pathname === "/ping") {
       const response = await sandbox.containerFetch(
         new URL('ping', request.url).toString(),
@@ -58,6 +73,6 @@ export default {
       });
     }
 
-    return new Response('Try /run, /file, or POST /chat');
+    return new Response('Try /run, /file, POST /chat, or POST /claude-chat');
   }
 };

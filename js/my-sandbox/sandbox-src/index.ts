@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { generateText } from "ai";
 import { claudeCode } from "ai-sdk-provider-claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 
 const system = `You are a read-only file analysis assistant. Your job is to read files and answer questions about them.
 
@@ -31,6 +32,46 @@ app.post("/chat", async (c) => {
     return c.json({ response: text });
   } catch (err) {
     console.error("POST /chat error:", err);
+    return c.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      500,
+    );
+  }
+});
+
+app.post("/claude-chat", async (c) => {
+  try {
+    const { message } = await c.req.json<{ message: string }>();
+    if (!message?.trim()) {
+      return c.json({ error: "message is required" }, 400);
+    }
+
+    const conversation = query({
+      prompt: message,
+      options: {
+        model: "claude-sonnet-4-6",
+        systemPrompt: system,
+        allowedTools: ["Read", "Glob", "Grep"],
+        permissionMode: "default",
+      },
+    });
+
+    // Iterate the async generator to find the final result message
+    let resultText = "";
+    for await (const msg of conversation) {
+      console.log(`new message: ${msg.uuid} [${msg.type}]`);
+      if (msg.type === "result") {
+        if (msg.subtype === "success") {
+          resultText = msg.result;
+        } else {
+          return c.json({ error: msg.errors.join(", ") }, 500);
+        }
+      }
+    }
+
+    return c.json({ response: resultText });
+  } catch (err) {
+    console.error("POST /claude-chat error:", err);
     return c.json(
       { error: err instanceof Error ? err.message : String(err) },
       500,
