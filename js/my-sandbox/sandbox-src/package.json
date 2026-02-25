@@ -1,0 +1,15 @@
+{
+  "name": "sandbox-app",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "hono": "^4.0.0",
+    "@hono/node-server": "^1.0.0",
+    "ai": "^6.0.97",
+    "ai-sdk-provider-claude-code": "^3.4.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}
