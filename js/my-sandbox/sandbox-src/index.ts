@@ -10,26 +10,40 @@ Rules:
 - You may ONLY read files — never write, edit, or create any files.
 - The user will specify which files to look at in their messages.`;
 
-const model = claudeCode("sonnet", {
-  allowedTools: ["Read", "Glob", "Grep"],
-});
-
 const app = new Hono();
 
 app.post("/chat", async (c) => {
   try {
-    const { message } = await c.req.json<{ message: string }>();
+    const { message, sessionId } = await c.req.json<{
+      message: string;
+      sessionId?: string;
+    }>();
     if (!message?.trim()) {
       return c.json({ error: "message is required" }, 400);
     }
 
-    const { text } = await generateText({
+    const model = claudeCode("sonnet", {
+      allowedTools: ["Read", "Glob", "Grep"],
+      ...(sessionId && { sdkOptions: { resume: sessionId } }),
+    });
+
+    const result = await generateText({
       model,
       system,
       prompt: message,
     });
 
-    return c.json({ response: text });
+    // Try to extract session ID from provider metadata
+    const resultSessionId =
+      (result.providerMetadata?.claudeCode as Record<string, unknown>)
+        ?.sessionId ??
+      (result.providerMetadata?.claude_code as Record<string, unknown>)
+        ?.sessionId;
+
+    return c.json({
+      response: result.text,
+      ...(resultSessionId && { sessionId: resultSessionId }),
+    });
   } catch (err) {
     console.error("POST /chat error:", err);
     return c.json(
@@ -41,7 +55,10 @@ app.post("/chat", async (c) => {
 
 app.post("/claude-chat", async (c) => {
   try {
-    const { message } = await c.req.json<{ message: string }>();
+    const { message, sessionId } = await c.req.json<{
+      message: string;
+      sessionId?: string;
+    }>();
     if (!message?.trim()) {
       return c.json({ error: "message is required" }, 400);
     }
@@ -53,13 +70,17 @@ app.post("/claude-chat", async (c) => {
         systemPrompt: system,
         allowedTools: ["Read", "Glob", "Grep"],
         permissionMode: "default",
+        ...(sessionId && { resume: sessionId }),
       },
     });
 
     // Iterate the async generator to find the final result message
     let resultText = "";
+    let resultSessionId: string | undefined;
     for await (const msg of conversation) {
-      console.log(`new message: ${msg.uuid} [${msg.type}]`);
+      if (msg.type === "system" && msg.subtype === "init") {
+        resultSessionId = msg.session_id;
+      }
       if (msg.type === "result") {
         if (msg.subtype === "success") {
           resultText = msg.result;
@@ -69,7 +90,10 @@ app.post("/claude-chat", async (c) => {
       }
     }
 
-    return c.json({ response: resultText });
+    return c.json({
+      response: resultText,
+      ...(resultSessionId && { sessionId: resultSessionId }),
+    });
   } catch (err) {
     console.error("POST /claude-chat error:", err);
     return c.json(
