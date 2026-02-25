@@ -38,6 +38,8 @@ app.post("/chat", async (c) => {
   }
 });
 
+app.get("/ping", (c) => c.json({ msg: "pong" }));
+
 app.get("/health", (c) => c.json({ status: "ok" }));
 
 const port = parseInt(process.env.PORT || "8080", 10);

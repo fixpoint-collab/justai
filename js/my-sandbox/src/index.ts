@@ -38,6 +38,17 @@ export default {
       return response;
     }
 
+    if (url.pathname === "/ping") {
+      const response = await sandbox.containerFetch(
+        new URL('ping', request.url).toString(),
+        {
+          method: 'GET',
+        },
+        8080,
+      );
+      return response;
+    }
+
     // Work with files
     if (url.pathname === '/file') {
       await sandbox.writeFile('/workspace/hello.txt', 'Hello, Sandbox!');
