@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { generateText } from "ai";
 import { claudeCode } from "ai-sdk-provider-claude-code";
 import { query } from "@anthropic-ai/claude-agent-sdk";
@@ -54,15 +55,15 @@ app.post("/chat", async (c) => {
 });
 
 app.post("/claude-chat", async (c) => {
-  try {
-    const { message, sessionId } = await c.req.json<{
-      message: string;
-      sessionId?: string;
-    }>();
-    if (!message?.trim()) {
-      return c.json({ error: "message is required" }, 400);
-    }
+  const { message, sessionId } = await c.req.json<{
+    message: string;
+    sessionId?: string;
+  }>();
+  if (!message?.trim()) {
+    return c.json({ error: "message is required" }, 400);
+  }
 
+  return streamSSE(c, async (stream) => {
     const conversation = query({
       prompt: message,
       options: {
@@ -74,33 +75,45 @@ app.post("/claude-chat", async (c) => {
       },
     });
 
-    // Iterate the async generator to find the final result message
-    let resultText = "";
-    let resultSessionId: string | undefined;
+    // Abort the conversation if the client disconnects
+    stream.onAbort(() => {
+      conversation.close();
+    });
+
     for await (const msg of conversation) {
       if (msg.type === "system" && msg.subtype === "init") {
-        resultSessionId = msg.session_id;
-      }
-      if (msg.type === "result") {
+        await stream.writeSSE({
+          event: "init",
+          data: JSON.stringify({ sessionId: msg.session_id }),
+        });
+      } else if (msg.type === "assistant") {
+        await stream.writeSSE({
+          event: "assistant",
+          data: JSON.stringify(msg),
+        });
+      } else if (msg.type === "result") {
         if (msg.subtype === "success") {
-          resultText = msg.result;
+          await stream.writeSSE({
+            event: "result",
+            data: JSON.stringify({ result: msg.result }),
+          });
         } else {
-          return c.json({ error: msg.errors.join(", ") }, 500);
+          await stream.writeSSE({
+            event: "error",
+            data: JSON.stringify({
+              error: msg.errors?.join(", ") ?? "Unknown error",
+            }),
+          });
         }
+      } else {
+        // Forward all other message types as-is for observability
+        await stream.writeSSE({
+          event: msg.type,
+          data: JSON.stringify(msg),
+        });
       }
     }
-
-    return c.json({
-      response: resultText,
-      ...(resultSessionId && { sessionId: resultSessionId }),
-    });
-  } catch (err) {
-    console.error("POST /claude-chat error:", err);
-    return c.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      500,
-    );
-  }
+  });
 });
 
 app.get("/ping", (c) => c.json({ msg: "pong" }));
